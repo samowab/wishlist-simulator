@@ -597,7 +597,11 @@
     html += '</div></div>';
 
     html += '<div class="section"><h2>지역별 위시리스트 분포</h2><div class="region-list">';
-    (s.regions||[]).slice().sort(function(a,b){ return (b.targetPct-a.targetPct) || a.name.localeCompare(b.name,'ko'); }).forEach(function(r){
+    (s.regions||[]).slice().sort(function(a,b){
+      if(a.name==='기타' && b.name!=='기타') return 1;
+      if(b.name==='기타' && a.name!=='기타') return -1;
+      return (b.targetPct-a.targetPct) || a.name.localeCompare(b.name,'ko');
+    }).forEach(function(r){
       var status = r.targetPct<=0 ? 'good' : (r.actualPct >= r.targetPct*0.9 ? 'good' : (r.actualPct >= r.targetPct*0.6 ? 'warning' : 'critical'));
       var fillPct = Math.max(0, Math.min(100, r.actualPct));
       var targetPct = Math.max(0, Math.min(100, r.targetPct));
