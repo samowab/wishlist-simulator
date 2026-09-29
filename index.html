@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>위시리스트 시뮬레이터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --surface-1:#fcfcfb; --page:#f9f9f7; --surface-2:#f2f1ec;
+    --ink-1:#0b0b0b; --ink-2:#52514e; --ink-muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10);
+    --series-1:#2a78d6; --series-2:#eb6834;
+    --good:#0ca30c; --good-bg:rgba(12,163,12,0.12);
+    --warning:#b8790a; --warning-bg:rgba(250,178,25,0.18);
+    --critical:#d03b3b; --critical-bg:rgba(208,59,59,0.12);
+    --font-body:'IBM Plex Sans',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --surface-1:#1a1a19; --page:#0d0d0d; --surface-2:#232320;
+      --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-muted:#898781;
+      --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+      --series-1:#3987e5; --series-2:#d95926;
+      --good:#0ca30c; --good-bg:rgba(12,163,12,0.18);
+      --warning:#fab219; --warning-bg:rgba(250,178,25,0.22);
+      --critical:#e66767; --critical-bg:rgba(230,103,103,0.18);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --surface-1:#1a1a19; --page:#0d0d0d; --surface-2:#232320;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+    --series-1:#3987e5; --series-2:#d95926;
+    --good:#0ca30c; --good-bg:rgba(12,163,12,0.18);
+    --warning:#fab219; --warning-bg:rgba(250,178,25,0.22);
+    --critical:#e66767; --critical-bg:rgba(230,103,103,0.18);
+  }
+  *{box-sizing:border-box;}
+  html,body{background:var(--page);}
+  body{color:var(--ink-1);font-family:var(--font-body);margin:0;padding-inline:16px;padding-block:0 40px;}
+  h1,h2,h3{margin:0;text-wrap:balance;}
+  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+  a{color:var(--series-1);}
+  button{font:inherit;cursor:pointer;}
+  .wrap{max-width:900px;margin:0 auto;}
+
+  .topbar{position:sticky;top:0;z-index:5;background:var(--page);padding-block:14px 8px;
+    display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border);}
+  .brand h1{font-size:1.05rem;font-weight:700;white-space:nowrap;}
+  .brand .sub{color:var(--ink-muted);font-size:.78rem;white-space:nowrap;margin-left:8px;}
+  .backlink{background:none;border:none;color:var(--ink-2);font-size:.85rem;padding:4px 0;}
+  .backlink:hover{color:var(--ink-1);}
+  .readonly-flag{font-size:.72rem;color:var(--ink-muted);border:1px solid var(--border);border-radius:99px;padding:2px 9px;white-space:nowrap;}
+
+  .list-head{padding-block:22px 14px;}
+  .list-head p{color:var(--ink-2);font-size:.92rem;line-height:1.55;margin:6px 0 0;}
+  .project-grid{display:grid;gap:10px;padding-block:6px 28px;}
+  .card{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:14px 16px;
+    display:flex;align-items:center;gap:14px;text-align:left;width:100%;color:inherit;}
+  .card:hover{border-color:var(--series-1);}
+  .card .cname{font-weight:700;font-size:.98rem;}
+  .card .cmeta{color:var(--ink-2);font-size:.8rem;margin-top:2px;}
+  .card .cright{margin-left:auto;text-align:right;flex-shrink:0;font-size:.78rem;color:var(--ink-muted);}
+  .empty-state{padding:40px 16px;text-align:center;color:var(--ink-2);}
+
+  .proj-head{padding-block:18px 4px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;}
+  .proj-title{font-size:1.3rem;font-weight:700;}
+  .dday-label{color:var(--ink-2);font-size:.84rem;font-family:var(--font-mono);}
+  .dday-chip{font-family:var(--font-mono);font-size:.8rem;font-weight:600;padding:4px 10px;border-radius:999px;
+    background:var(--surface-2);color:var(--ink-2);margin-left:auto;}
+
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-block:14px 20px;}
+  .tile{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+  .tile .tl{font-size:.74rem;color:var(--ink-muted);}
+  .tile .tv{font-family:var(--font-mono);font-size:1.4rem;font-weight:700;margin-top:4px;}
+  .tile .ts{font-size:.72rem;color:var(--ink-muted);margin-top:3px;line-height:1.4;}
+  .status-pill{display:inline-flex;align-items:center;gap:5px;font-size:.76rem;font-weight:700;padding:3px 9px;border-radius:999px;margin-top:5px;}
+  .status-pill.good{background:var(--good-bg);color:var(--good);}
+  .status-pill.warning{background:var(--warning-bg);color:var(--warning);}
+  .status-pill.critical{background:var(--critical-bg);color:var(--critical);}
+  .status-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+  .section{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:18px 18px 20px;margin-bottom:18px;}
+  .section h2{font-size:.98rem;font-weight:700;}
+  .section > summary{font-size:.98rem;font-weight:700;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;}
+  .section > summary::-webkit-details-marker{display:none;}
+  .section > summary .chev{display:inline-block;transition:transform .15s;color:var(--ink-muted);font-size:.8rem;}
+  .section[open] > summary .chev{transform:rotate(90deg);}
+  .section .shint{color:var(--ink-muted);font-size:.8rem;margin-top:3px;line-height:1.55;}
+
+  .funnel-note{background:var(--surface-2);border-radius:9px;padding:11px 13px;margin-top:14px;font-size:.8rem;color:var(--ink-2);line-height:1.7;}
+  .funnel-note .fn-step{display:flex;justify-content:space-between;gap:10px;}
+  .funnel-note .fn-step b{color:var(--ink-1);font-family:var(--font-mono);}
+
+  .chart-wrap{margin-top:14px;}
+  .legend{display:flex;gap:16px;margin-top:8px;font-size:.78rem;color:var(--ink-2);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend i{width:10px;height:10px;border-radius:2px;display:inline-block;}
+
+  .callout{border-radius:10px;padding:13px 15px;margin-top:14px;font-size:.87rem;line-height:1.6;}
+  .callout.good{background:var(--good-bg);color:var(--ink-1);}
+  .callout.warning{background:var(--warning-bg);color:var(--ink-1);}
+  .callout.critical{background:var(--critical-bg);color:var(--ink-1);}
+  .callout .cnote{color:var(--ink-muted);font-size:.76rem;margin-top:6px;font-style:italic;}
+
+  .mini-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
+  .mini-stat{background:var(--surface-2);border-radius:9px;padding:10px 12px;}
+  .mini-stat .ml{font-size:.72rem;color:var(--ink-muted);}
+  .mini-stat .mv{font-family:var(--font-mono);font-weight:700;font-size:1.05rem;margin-top:2px;}
+  .mini-stat.addition .mv{color:var(--good);}
+  .mini-stat.deletion .mv{color:var(--critical);}
+  .mini-stat.outstanding .mv{color:var(--series-2);}
+  .mini-stat .ms{font-size:.7rem;color:var(--ink-muted);margin-top:2px;}
+
+  .timeline{display:grid;gap:0;margin-top:14px;}
+  .tl-row{display:grid;grid-template-columns:100px 1fr;gap:14px;padding-block:12px;border-top:1px solid var(--border);}
+  .tl-row:first-child{border-top:none;}
+  .tl-row.current .tl-num{color:var(--series-1);}
+  .tl-num{font-family:var(--font-mono);font-size:.72rem;color:var(--ink-muted);}
+  .tl-label{font-weight:700;font-size:.88rem;margin-top:2px;}
+  .tl-actions{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px;}
+  .tl-actions li{font-size:.82rem;color:var(--ink-2);line-height:1.5;padding-left:12px;position:relative;}
+  .tl-actions li::before{content:"–";position:absolute;left:0;color:var(--ink-muted);}
+  .tl-row.current{background:var(--surface-2);margin-inline:-18px;padding-inline:18px;border-radius:8px;}
+
+  .milestone-list{display:grid;gap:8px;margin-top:14px;}
+  .milestone-card{background:var(--surface-2);border-radius:9px;padding:10px 12px;}
+  .milestone-card .mtitle{font-weight:700;font-size:.9rem;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;}
+  .milestone-card .mtitle .mdate{font-family:var(--font-mono);font-size:.76rem;color:var(--ink-muted);font-weight:400;}
+  .milestone-card .mrow{font-size:.8rem;color:var(--ink-2);margin-top:4px;display:flex;gap:14px;flex-wrap:wrap;}
+
+  .region-list{display:grid;gap:10px;margin-top:14px;}
+  .region-row{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center;}
+  .region-name{font-weight:600;font-size:.86rem;}
+  .bullet{position:relative;height:22px;background:var(--surface-2);border-radius:5px;}
+  .bullet-fill{position:absolute;left:0;top:0;height:100%;border-radius:5px;}
+  .bullet-fill.good{background:var(--good);}
+  .bullet-fill.warning{background:var(--warning);}
+  .bullet-fill.critical{background:var(--critical);}
+  .bullet-target{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-1);}
+  .region-readout{font-family:var(--font-mono);font-size:.74rem;color:var(--ink-2);white-space:nowrap;}
+
+  .budget-out{background:var(--surface-2);border-radius:10px;padding:14px 16px;margin-top:12px;}
+  .budget-out .bl{font-size:.76rem;color:var(--ink-muted);}
+  .budget-out .bv{font-family:var(--font-mono);font-size:1.3rem;font-weight:700;margin-top:4px;}
+  .budget-out .bn{font-size:.72rem;color:var(--ink-muted);margin-top:5px;line-height:1.5;}
+  .footnote{color:var(--ink-muted);font-size:.76rem;text-align:center;padding-block:20px 4px;}
+
+  @media (max-width:640px){
+    .tiles{grid-template-columns:1fr;}
+    .region-row{grid-template-columns:1fr;}
+    .tl-row{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var PRESETS = {
+    casual_indie:  {label:'캐주얼 인디/플랫포머', targetPeriodMonths:9,  unitsTarget:20000, directSaleRatio:20, launchConv:12, totalConv:22, organicRatio:30, cpw:[2500,1200,4000,900],  mix:[35,25,25,15]},
+    narrative:     {label:'내러티브 어드벤처',     targetPeriodMonths:9,  unitsTarget:18000, directSaleRatio:10, launchConv:9,  totalConv:17, organicRatio:35, cpw:[3000,1500,4500,1000], mix:[35,25,25,15]},
+    roguelike:     {label:'로그라이크/액션',       targetPeriodMonths:12, unitsTarget:35000, directSaleRatio:15, launchConv:13, totalConv:25, organicRatio:22, cpw:[3200,1400,4200,1000], mix:[35,25,25,15]},
+    strategy_sim:  {label:'전략/시뮬레이션',       targetPeriodMonths:12, unitsTarget:28000, directSaleRatio:8,  launchConv:8,  totalConv:19, organicRatio:25, cpw:[3500,1600,4800,1100], mix:[35,25,25,15]},
+    mmorpg:        {label:'MMORPG',               targetPeriodMonths:12, unitsTarget:40000, directSaleRatio:8,  launchConv:10, totalConv:20, organicRatio:20, cpw:[4000,1800,5000,1200], mix:[35,25,25,15]},
+    arpg:          {label:'ARPG(액션 RPG)',        targetPeriodMonths:12, unitsTarget:45000, directSaleRatio:12, launchConv:14, totalConv:26, organicRatio:20, cpw:[3300,1400,4300,1000], mix:[35,25,25,15]}
+  };
+  var EVENT_TYPES = {
+    cbt: "CBT · 알파테스트", nextfest: "Steam Next Fest", demo: "자체 데모 공개", other: "기타 마케팅 모먼트"
+  };
+  var ACTION_PHASES = [
+    {num:"00", label:"스토어 페이지 기초", startDday:Infinity,
+      actions:["정확한 태그·장르·메타데이터 설정", "캡슐·트레일러·스크린샷 등 필수 에셋 완성", "위시리스트 CTA 노출 확인"]},
+    {num:"01", label:"초기 모멘텀 구축", startDday:365,
+      actions:["발표 → 한정 플레이테스트 → 데모 순으로 단계적 공개", "데브로그 4~6주 간격 발행", "커뮤니티 채널(Discord 등) 개설"]},
+    {num:"02", label:"데모 · Next Fest 준비", startDday:120,
+      actions:["Steamworks에서 이벤트 신청 (자동 등록 아님)", "핵심 루프를 대표하는 무료 데모 준비", "이벤트 전후 크로스채널 프로모션 조율"]},
+    {num:"03", label:"빌드업 · 사전판매", startDday:60,
+      actions:["데브로그 주기를 2~4주로 단축", "사전판매 오픈 + 크리에이터 파트너십 가동", "전환 잘 되는 채널에 예산 집중"]},
+    {num:"04", label:"런칭 준비 (D-7)", startDday:7,
+      actions:["스토어 페이지·가격·할인 최종 확정", "프레스·크리에이터 엠바고 스케줄 확정", "알려진 이슈 문서화 + 대응 계획"]},
+    {num:"05", label:"런칭 주간", startDday:0,
+      actions:["Day0: 안정성 우선, 신규 기능 배포 금지", "Day1-3: 리뷰 모니터링 + 핫픽스 + 재메시징", "Day4-7: 전환 채널 집중, 2차 크리에이터 웨이브, 1주차 리캡"]},
+    {num:"06", label:"포스트 런칭", startDday:-7,
+      actions:["재할인까지 30일 쿨다운 규칙 반영", "콘텐츠 드랍에 맞춰 Visibility Round 활용", "리뷰 스코어 지속 모니터링"]}
+  ];
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  }); }
+  function num(v, d){ var n = parseFloat(v); return isFinite(n) ? n : (d===undefined?null:d); }
+  function fmtInt(n){ return Math.round(n).toLocaleString('ko-KR'); }
+  function fmtKRW(n){
+    if(n==null || !isFinite(n)) return "—";
+    n = Math.round(n);
+    if(n>=100000000) return "약 " + (Math.round(n/10000000)/10).toLocaleString('ko-KR') + "억원";
+    if(n>=10000) return "약 " + Math.round(n/10000).toLocaleString('ko-KR') + "만원";
+    return n.toLocaleString('ko-KR') + "원";
+  }
+  function fmtCompact(n){
+    if(n>=10000) return (Math.round(n/1000)/10).toLocaleString('ko-KR')+'만';
+    return Math.round(n).toLocaleString('ko-KR');
+  }
+  function fmtAxisDateShort(dt){ return (dt.getMonth()+1)+'/'+dt.getDate(); }
+  function fmtAxisDateMonth(dt){ return (dt.getFullYear()%100)+'.'+(dt.getMonth()+1); }
+  function dday(dateStr){
+    if(!dateStr) return null;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var t = new Date(dateStr+"T00:00:00");
+    return Math.round((t-today)/86400000);
+  }
+  function ddayLabel(d){
+    if(d===null) return "출시일 미설정";
+    if(d>0) return "D-"+d;
+    if(d===0) return "D-day";
+    return "D+"+(-d);
+  }
+  function currentPhaseIndex(d){
+    if(d===null) return 0;
+    var idx = 0;
+    for(var i=0;i<ACTION_PHASES.length;i++){ if(d<=ACTION_PHASES[i].startDday) idx = i; }
+    return idx;
+  }
+
+  function targetWishlist(sim){
+    var units = num(sim.unitsTarget);
+    if(!units) return null;
+    var direct = units * (num(sim.directSaleRatio,0)/100);
+    var viaWishlist = units - direct;
+    var totalConv = num(sim.totalConv,20)/100;
+    if(totalConv<=0) return null;
+    var value = viaWishlist / totalConv;
+    var tcLow = Math.max(0.01, num(sim.totalConv,20)-5)/100;
+    var tcHigh = (num(sim.totalConv,20)+5)/100;
+    return { value:value, low: viaWishlist/tcHigh, high: viaWishlist/tcLow, unitsDirect:direct, unitsViaWishlist:viaWishlist };
+  }
+  function realityCheck(sim, twl){
+    if(!twl) return null;
+    var cap = num(sim.wishlistCap, 3000000);
+    if(twl.value <= cap) return null;
+    var units = num(sim.unitsTarget);
+    var totalConv = num(sim.totalConv,20)/100;
+    var impliedDirect = 1 - (cap*totalConv)/units;
+    return { cap:cap, over: twl.value-cap, impliedDirect: Math.max(0, Math.min(99, impliedDirect*100)) };
+  }
+  function buildCurve(sim){
+    var twl = targetWishlist(sim);
+    if(!twl || !sim.launchDate) return null;
+    var target = twl.value;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var launch = new Date(sim.launchDate+"T00:00:00");
+    var totalDays = Math.round((launch-today)/86400000);
+    if(totalDays <= 0) return {launched:true, target:target};
+    var current = num(sim.currentWishlist, 0) || 0;
+    var allEvents = (sim.events||[]).filter(function(e){ return e.date; }).map(function(e){
+      var d = Math.round((new Date(e.date+"T00:00:00")-today)/86400000);
+      return Object.assign({}, e, {d:d});
+    }).filter(function(e){ return e.d<=totalDays; }).sort(function(a,b){ return a.d-b.d; });
+    var futureEvents = allEvents.filter(function(e){ return e.d>=0 && e.expectedBump; });
+    var bumpSum = futureEvents.reduce(function(s,e){ return s+Number(e.expectedBump||0); }, 0);
+    var organicTotal = target - current - bumpSum;
+    var dailyRate = organicTotal / totalDays;
+    var points = []; var cumBump = 0; var ei = 0;
+    for(var d=0; d<=totalDays; d++){
+      while(ei<futureEvents.length && futureEvents[ei].d===d){ cumBump += Number(futureEvents[ei].expectedBump||0); ei++; }
+      points.push({d:d, date:new Date(today.getTime()+d*86400000), value: current + dailyRate*d + cumBump});
+    }
+    var actualAll = (sim.actualSeries||[]).map(function(p){
+      var pd = Math.round((new Date(p.date+"T00:00:00")-today)/86400000);
+      return {d:pd, date:new Date(today.getTime()+pd*86400000), value:p.total};
+    }).sort(function(a,b){ return a.d-b.d; });
+    var earliestEventDay = allEvents.length ? allEvents[0].d : 0;
+    var earliestActualDay = actualAll.length ? actualAll[0].d : 0;
+    var chartStartDay = Math.min(0, earliestEventDay, earliestActualDay);
+    var actualPoints = actualAll.filter(function(p){ return p.d<=totalDays; });
+    return {points:points, events:allEvents, totalDays:totalDays, chartStartDay:chartStartDay,
+      actualPoints:actualPoints, target:target, current:current, overshoot: bumpSum > target - current};
+  }
+  function gapAnalysis(sim, curve){
+    if(!curve || curve.launched || !sim.currentWishlist || !sim.currentWishlistDate) return null;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var d = Math.round((new Date(sim.currentWishlistDate+"T00:00:00")-today)/86400000);
+    d = Math.max(0, Math.min(curve.totalDays, d));
+    var expected = curve.points[d].value;
+    var actual = num(sim.currentWishlist, 0);
+    var gapPct = expected ? (actual-expected)/expected*100 : null;
+    var status, msg;
+    if(gapPct===null){ status="neutral"; msg="기준 데이터가 부족해 갭을 계산할 수 없습니다."; }
+    else if(gapPct >= 0){ status="good"; msg="목표 곡선을 상회하고 있습니다 (" + (gapPct>=0?"+":"") + Math.round(gapPct) + "%). 현재 페이스를 유지하세요."; }
+    else if(gapPct > -10){ status="good"; msg="목표 곡선과 거의 일치합니다 (" + Math.round(gapPct) + "%). 다음 테스트 이벤트 노출을 강화해 격차를 줄이세요."; }
+    else if(gapPct > -30){ status="warning"; msg="목표 대비 " + Math.round(-gapPct) + "% 뒤처져 있습니다. 채널 믹스를 재점검하고 전환 잘 되는 채널에 예산을 집중하는 것을 검토하세요. 다음 테스트 이벤트의 기대치를 더 공격적으로 설계하는 것도 방법입니다.";}
+    else { status="critical"; msg="목표 대비 " + Math.round(-gapPct) + "% 큰 폭으로 뒤처져 있습니다. 구조적 대응이 필요합니다 — 출시일 연기, 목표 판매량 하향 조정, 추가 대외 테스트 편성, 예산 증액 중 검토가 필요합니다."; }
+    return {expected:expected, actual:actual, gapPct:gapPct, status:status, msg:msg};
+  }
+  function budgetCalc(sim){
+    var twl = targetWishlist(sim);
+    if(!twl) return null;
+    var current = num(sim.currentWishlist,0) || 0;
+    var remaining = Math.max(0, twl.value - current);
+    var paid = remaining * (1 - num(sim.organicRatio,0)/100);
+    var cpw = num(sim.costPerWishlist, 0);
+    var cpwBudget = paid*cpw;
+    var milestoneBudget = (sim.events||[]).reduce(function(s,e){ return s+num(e.budgetPlanned,0); }, 0);
+    var milestoneSpent = (sim.events||[]).reduce(function(s,e){ return s+num(e.budgetSpent,0); }, 0);
+    return { remaining:remaining, paid:paid, cpw:cpw, cpwBudget:cpwBudget, milestoneBudget:milestoneBudget,
+      milestoneSpent:milestoneSpent, budget: cpwBudget+milestoneBudget };
+  }
+
+  function renderCurveSvg(sim, curve){
+    if(!curve) return '<div class="empty-state" style="padding:30px 10px;">목표 판매 개수와 출시일이 설정되지 않았습니다.</div>';
+    if(curve.launched) return '<div class="empty-state" style="padding:30px 10px;">이미 출시일이 지났습니다.</div>';
+    var W = 760, H = 280, padL = 54, padR = 20, padT = 18, padB = 42;
+    var plotW = W-padL-padR, plotH = H-padT-padB;
+    var domainDays = Math.max(1, curve.totalDays - curve.chartStartDay);
+    var actualVals = curve.actualPoints.map(function(p){ return p.value; });
+    var maxY = Math.max(curve.target, curve.current, sim.currentWishlist||0);
+    if(actualVals.length) maxY = Math.max(maxY, Math.max.apply(null, actualVals));
+    maxY = maxY * 1.15 || 1;
+    function xOf(d){ return padL + ((d-curve.chartStartDay)/domainDays)*plotW; }
+    function yOf(v){ return padT + plotH - Math.max(0,v)/maxY*plotH; }
+    var xAxis = '<line x1="'+padL+'" y1="'+(padT+plotH)+'" x2="'+(W-padR)+'" y2="'+(padT+plotH)+'" stroke="var(--axis)" stroke-width="1"/>';
+    var xTicks = 4;
+    for(var xi=0; xi<=xTicks; xi++){
+      var xd = curve.chartStartDay + Math.round(domainDays*xi/xTicks);
+      var xx = xOf(xd);
+      var xdate = new Date(Date.now()); xdate.setHours(0,0,0,0); xdate.setDate(xdate.getDate()+xd);
+      xAxis += '<line x1="'+xx.toFixed(1)+'" y1="'+(padT+plotH)+'" x2="'+xx.toFixed(1)+'" y2="'+(padT+plotH+4)+'" stroke="var(--axis)" stroke-width="1"/>';
+      xAxis += '<text x="'+xx.toFixed(1)+'" y="'+(padT+plotH+16)+'" font-size="10" fill="var(--ink-muted)" text-anchor="'+(xi===0?'start':xi===xTicks?'end':'middle')+'" font-family="var(--font-mono)">'+fmtAxisDateShort(xdate)+'</text>';
+    }
+    if(curve.chartStartDay<0){
+      var tx = xOf(0);
+      xAxis += '<line x1="'+tx.toFixed(1)+'" y1="'+padT+'" x2="'+tx.toFixed(1)+'" y2="'+(padT+plotH)+'" stroke="var(--ink-muted)" stroke-width="1" stroke-dasharray="1,2"/>'
+        + '<text x="'+tx.toFixed(1)+'" y="'+(padT+plotH+28)+'" font-size="9" fill="var(--ink-muted)" text-anchor="middle">오늘</text>';
+    }
+    var path = curve.points.map(function(p,i){ return (i===0?'M':'L') + xOf(p.d).toFixed(1) + ',' + yOf(p.value).toFixed(1); }).join(' ');
+    var areaPath = path + ' L' + xOf(curve.totalDays).toFixed(1) + ',' + yOf(0).toFixed(1) + ' L' + xOf(0).toFixed(1) + ',' + yOf(0).toFixed(1) + ' Z';
+    var actualPath = curve.actualPoints.length>1
+      ? curve.actualPoints.map(function(p,i){ return (i===0?'M':'L') + xOf(p.d).toFixed(1) + ',' + yOf(p.value).toFixed(1); }).join(' ')
+      : '';
+    var gridLines = '';
+    var ySteps = 4;
+    for(var i=0;i<=ySteps;i++){
+      var gy = padT + plotH - (i/ySteps)*plotH;
+      var gv = Math.round(maxY*i/ySteps);
+      gridLines += '<line x1="'+padL+'" y1="'+gy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+gy.toFixed(1)+'" stroke="var(--grid)" stroke-width="1"/>';
+      gridLines += '<text x="'+(padL-8)+'" y="'+(gy+3).toFixed(1)+'" font-size="10" fill="var(--ink-muted)" text-anchor="end" font-family="var(--font-mono)">'+fmtCompact(gv)+'</text>';
+    }
+    var eventMarks = curve.events.map(function(e){
+      var x = xOf(e.d);
+      return '<line x1="'+x.toFixed(1)+'" y1="'+padT+'" x2="'+x.toFixed(1)+'" y2="'+(padT+plotH)+'" stroke="var(--axis)" stroke-width="1" stroke-dasharray="2,3"/>'
+        + '<text x="'+x.toFixed(1)+'" y="'+(padT-6)+'" font-size="9" fill="var(--ink-muted)" text-anchor="middle">'+esc((e.name||'').slice(0,10))+'</text>';
+    }).join('');
+    var actualDot = '';
+    if(curve.actualPoints.length<=1 && sim.currentWishlist && sim.currentWishlistDate){
+      var today0 = new Date(); today0.setHours(0,0,0,0);
+      var ad = Math.round((new Date(sim.currentWishlistDate+"T00:00:00")-today0)/86400000);
+      if(ad>=curve.chartStartDay && ad<=curve.totalDays){
+        var ax = xOf(ad), ay = yOf(sim.currentWishlist);
+        actualDot = '<circle cx="'+ax.toFixed(1)+'" cy="'+ay.toFixed(1)+'" r="5" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"/>'
+          + '<text x="'+ax.toFixed(1)+'" y="'+(ay-11).toFixed(1)+'" font-size="10" font-weight="700" fill="var(--series-2)" text-anchor="middle" font-family="var(--font-mono)">'+fmtCompact(sim.currentWishlist)+'</text>';
+      }
+    }
+    var actualEndLabel = '';
+    if(curve.actualPoints.length>1){
+      var lastAP = curve.actualPoints[curve.actualPoints.length-1];
+      var lax = xOf(lastAP.d), lay = yOf(lastAP.value);
+      actualEndLabel = '<circle cx="'+lax.toFixed(1)+'" cy="'+lay.toFixed(1)+'" r="4" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="1.5"/>'
+        + '<text x="'+lax.toFixed(1)+'" y="'+(lay-10).toFixed(1)+'" font-size="10" font-weight="700" fill="var(--series-2)" text-anchor="middle" font-family="var(--font-mono)">'+fmtCompact(lastAP.value)+'</text>';
+    }
+    var endX = xOf(curve.totalDays), endY = yOf(curve.target);
+    var endLabel = '<circle cx="'+endX.toFixed(1)+'" cy="'+endY.toFixed(1)+'" r="4" fill="var(--series-1)"/>'
+      + '<text x="'+(endX-6).toFixed(1)+'" y="'+(endY-9).toFixed(1)+'" font-size="10" font-weight="700" fill="var(--series-1)" text-anchor="end" font-family="var(--font-mono)">'+fmtCompact(curve.target)+'</text>';
+    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="overflow:visible;display:block;">'
+      + gridLines + xAxis
+      + '<path d="'+areaPath+'" fill="var(--series-1)" opacity="0.10"/>'
+      + '<path d="'+path+'" fill="none" stroke="var(--series-1)" stroke-width="2"/>'
+      + (actualPath ? '<path d="'+actualPath+'" fill="none" stroke="var(--series-2)" stroke-width="2"/>' : '')
+      + eventMarks + endLabel + actualDot + actualEndLabel
+      + '</svg>';
+  }
+
+  function renderActualTrendSvg(sim){
+    var series = sim.actualSeries;
+    if(!series || series.length<2) return '<div class="empty-state" style="padding:24px 10px;">아직 업로드된 실측 데이터가 없습니다.</div>';
+    var W=760, H=280, padL=54, padR=20;
+    var plotW = W-padL-padR;
+    function xOf(i){ return padL + (i/(series.length-1))*plotW; }
+    var barTop=16, barH=70, barBottomY=barTop+barH;
+    var maxBuckets = 40;
+    var bucketSize = Math.max(1, Math.ceil(series.length/maxBuckets));
+    var buckets = [];
+    for(var bi=0; bi<series.length; bi+=bucketSize){
+      var chunk = series.slice(bi, Math.min(series.length, bi+bucketSize));
+      var add = chunk.reduce(function(s,p){ return s+(p.addition||0); }, 0);
+      var del = chunk.reduce(function(s,p){ return s+(p.deletion||0); }, 0);
+      buckets.push({idx: bi+(chunk.length-1)/2, add:add, del:del});
+    }
+    var maxFlow = 1;
+    buckets.forEach(function(b){ maxFlow = Math.max(maxFlow, b.add, b.del); });
+    var zeroY = barTop + barH/2;
+    var halfH = barH/2*0.92;
+    var barWidth = Math.max(1.5, (plotW/series.length)*bucketSize*0.7);
+    var bars = buckets.map(function(b){
+      var x = xOf(b.idx) - barWidth/2;
+      var addH = (b.add/maxFlow)*halfH, delH = (b.del/maxFlow)*halfH;
+      return '<rect x="'+x.toFixed(1)+'" y="'+(zeroY-addH).toFixed(1)+'" width="'+barWidth.toFixed(1)+'" height="'+addH.toFixed(1)+'" fill="var(--good)" opacity="0.85"/>'
+        + '<rect x="'+x.toFixed(1)+'" y="'+zeroY.toFixed(1)+'" width="'+barWidth.toFixed(1)+'" height="'+delH.toFixed(1)+'" fill="var(--critical)" opacity="0.85"/>';
+    }).join('');
+    var zeroLine = '<line x1="'+padL+'" y1="'+zeroY.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+zeroY.toFixed(1)+'" stroke="var(--axis)" stroke-width="1"/>';
+    var barPanelLabel = '<text x="'+padL+'" y="'+(barTop-4)+'" font-size="9" fill="var(--ink-muted)">Addition(추가) / Deletion(이탈) — 구간 합계</text>';
+    var lineTop = barBottomY+26, padB=28;
+    var linePlotH = H-lineTop-padB;
+    var vals = series.map(function(p){return p.total;});
+    var minV = Math.min.apply(null, vals), maxV = Math.max.apply(null, vals);
+    var range = Math.max(1, maxV-minV); var pad = range*0.15;
+    var lo = Math.max(0,minV-pad), hi = maxV+pad;
+    function yOf(v){ return lineTop+linePlotH - (v-lo)/(hi-lo)*linePlotH; }
+    var path = series.map(function(p,i){ return (i===0?'M':'L')+xOf(i).toFixed(1)+','+yOf(p.total).toFixed(1); }).join(' ');
+    var areaPath = path+' L'+xOf(series.length-1).toFixed(1)+','+(lineTop+linePlotH)+' L'+xOf(0).toFixed(1)+','+(lineTop+linePlotH)+' Z';
+    var gridLines='';
+    for(var i=0;i<=3;i++){
+      var gy = lineTop+linePlotH-(i/3)*linePlotH, gv = Math.round(lo+(hi-lo)*i/3);
+      gridLines += '<line x1="'+padL+'" y1="'+gy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+gy.toFixed(1)+'" stroke="var(--grid)" stroke-width="1"/>';
+      gridLines += '<text x="'+(padL-8)+'" y="'+(gy+3).toFixed(1)+'" font-size="10" fill="var(--ink-muted)" text-anchor="end" font-family="var(--font-mono)">'+fmtCompact(gv)+'</text>';
+    }
+    var linePanelLabel = '<text x="'+padL+'" y="'+(lineTop-8)+'" font-size="9" fill="var(--ink-muted)">Outstanding(보유 잔고)</text>';
+    var xTicks=4, xAxis='';
+    for(var xi=0; xi<=xTicks; xi++){
+      var idx = Math.round((series.length-1)*xi/xTicks);
+      var xx = xOf(idx);
+      xAxis += '<text x="'+xx.toFixed(1)+'" y="'+(lineTop+linePlotH+16)+'" font-size="10" fill="var(--ink-muted)" text-anchor="'+(xi===0?'start':xi===xTicks?'end':'middle')+'" font-family="var(--font-mono)">'+fmtAxisDateMonth(new Date(series[idx].date+"T00:00:00"))+'</text>';
+    }
+    var lastP = series[series.length-1];
+    var endLabel = '<circle cx="'+xOf(series.length-1).toFixed(1)+'" cy="'+yOf(lastP.total).toFixed(1)+'" r="4" fill="var(--series-2)"/>'
+      + '<text x="'+(xOf(series.length-1)-6).toFixed(1)+'" y="'+(yOf(lastP.total)-9).toFixed(1)+'" font-size="10" font-weight="700" fill="var(--series-2)" text-anchor="end" font-family="var(--font-mono)">'+fmtCompact(lastP.total)+'</text>';
+    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="overflow:visible;display:block;">'
+      + barPanelLabel + bars + zeroLine
+      + linePanelLabel + gridLines + xAxis
+      + '<path d="'+areaPath+'" fill="var(--series-2)" opacity="0.10"/>'
+      + '<path d="'+path+'" fill="none" stroke="var(--series-2)" stroke-width="2"/>'
+      + endLabel + '</svg>';
+  }
+
+  var app = document.getElementById("app");
+  var PROJECTS = []; var GENERATED_AT = null;
+  var route = {view:"list", id:null};
+
+  function goList(){ route={view:"list", id:null}; render(); }
+  function goSim(id){ route={view:"sim", id:id}; render(); }
+  window.WLS = {goList:goList, goSim:goSim};
+
+  function topbar(showBack){
+    return '<div class="topbar"><div class="brand">'
+      + (showBack ? '<button class="backlink" onclick="WLS.goList()">&larr; 프로젝트 목록</button>'
+                  : '<h1 style="display:inline;">위시리스트 시뮬레이터</h1><span class="sub">목표 역산 · 마일스톤 · 지역 갭 · 액션 가이드</span>')
+      + '</div><span class="readonly-flag">읽기 전용 미러</span></div>';
+  }
+
+  function render(){ if(route.view==="list") renderList(); else renderSim(); }
+
+  function renderList(){
+    var html = topbar(false);
+    html += '<div class="list-head"><p>실시간 편집판은 Claude 대시보드에서 운영되며, 이 페이지는 그 스냅샷을 보여주는 읽기 전용 미러입니다.'
+      + (GENERATED_AT ? (' 마지막 동기화: '+new Date(GENERATED_AT).toLocaleString('ko-KR')) : '') + '</p></div>';
+    html += '<div class="project-grid">';
+    if(PROJECTS.length===0){
+      html += '<div class="empty-state">아직 동기화된 프로젝트가 없습니다.</div>';
+    } else {
+      PROJECTS.forEach(function(s){
+        var twl = targetWishlist(s);
+        var d = dday(s.launchDate);
+        html += '<button class="card" onclick="WLS.goSim(\''+s.id+'\')"><div>'
+          + '<div class="cname">'+esc(s.name)+'</div>'
+          + '<div class="cmeta">'+(s.launchDate?esc(s.launchDate):'출시일 미설정')+(s.genrePreset&&PRESETS[s.genrePreset]?' · '+esc(PRESETS[s.genrePreset].label):'')+'</div></div>'
+          + '<div class="cright">'+ddayLabel(d)+'<br>'+(twl?('목표 WL '+fmtCompact(twl.value)):'목표 미설정')+'</div></button>';
+      });
+    }
+    html += '</div>';
+    app.innerHTML = html;
+  }
+
+  function renderSim(){
+    var s = PROJECTS.find(function(p){ return p.id===route.id; });
+    if(!s){ app.innerHTML = topbar(true) + '<div class="empty-state">프로젝트를 찾을 수 없습니다.</div>'; return; }
+    var twl = targetWishlist(s);
+    var curve = buildCurve(s);
+    var gap = gapAnalysis(s, curve);
+    var bud = budgetCalc(s);
+    var d = dday(s.launchDate);
+    var curIdx = s.launchDate ? currentPhaseIndex(d) : 0;
+
+    var html = topbar(true);
+    html += '<div class="proj-head"><div><span class="proj-title">'+esc(s.name)+'</span>'
+      + '<div class="dday-label">'+(s.launchDate?esc(s.launchDate):'출시일 미설정')+'</div></div>'
+      + '<span class="dday-chip">'+ddayLabel(d)+'</span></div>';
+
+    html += '<div class="tiles">';
+    html += '<div class="tile"><div class="tl">목표 위시리스트 (전체)</div><div class="tv">'+(twl?fmtInt(twl.value):'—')+'</div>'
+      + '<div class="ts">'+(twl?('전환율 ±5%p 시 '+fmtCompact(twl.low)+'~'+fmtCompact(twl.high)):'')+'</div></div>';
+    html += '<div class="tile"><div class="tl">실측 대비 갭</div>'
+      + (gap ? ('<div class="tv">'+(gap.gapPct>=0?'+':'')+Math.round(gap.gapPct)+'%</div><span class="status-pill '+gap.status+'">'+({good:'양호',warning:'주의',critical:'위험'}[gap.status])+'</span>')
+             : '<div class="tv">—</div>') + '</div>';
+    html += '<div class="tile"><div class="tl">추천 예산 (CPW + 마일스톤)</div><div class="tv">'+(bud?fmtKRW(s.budgetOverride||bud.budget):'—')+'</div>'
+      + '<div class="ts">'+(bud?(fmtCompact(bud.paid)+'건 × '+fmtInt(bud.cpw)+'원 + 정액 '+fmtKRW(bud.milestoneBudget)):'')+'</div></div>';
+    html += '</div>';
+
+    if(twl){
+      html += '<div class="section"><h2>가정치</h2>'
+        + (s.genrePreset&&PRESETS[s.genrePreset]?'<div class="shint">장르 프리셋: '+esc(PRESETS[s.genrePreset].label)+'</div>':'')
+        + '<div class="funnel-note">'
+        + '<div class="fn-step"><span>목표 판매 개수</span><b>'+fmtInt(s.unitsTarget)+'카피</b></div>'
+        + '<div class="fn-step"><span>− 비위시리스트 직접구매 ('+(s.directSaleRatio||0)+'%)</span><b>−'+fmtInt(twl.unitsDirect)+'카피</b></div>'
+        + '<div class="fn-step"><span>÷ 누적 총 전환율 ('+(s.totalConv||0)+'%)</span><b>= '+fmtInt(twl.value)+'건</b></div>'
+        + '<div class="fn-step"><span>오가닉 비율</span><b>'+(s.organicRatio||0)+'%</b></div>'
+        + '</div>';
+      var rc = realityCheck(s, twl);
+      if(rc){
+        html += '<div class="callout warning"><b>이 목표는 위시리스트만으로 설명되지 않는 규모입니다.</b> 계산된 목표('+fmtInt(twl.value)+'건)가 상한 참고치('+fmtInt(rc.cap)+'건)보다 '+fmtInt(rc.over)+'건 많습니다.</div>';
+      }
+      html += '</div>';
+    }
+
+    html += '<div class="section"><h2>실측 위시리스트</h2>';
+    if(s.currentWishlistDate){
+      html += '<div class="mini-stats">'
+        + '<div class="mini-stat addition"><div class="ml">Addition (누적)</div><div class="mv">+'+fmtInt(s.csvAdditionAll||0)+'</div><div class="ms">최근 30일 +'+fmtInt(s.csvAddition30||0)+'</div></div>'
+        + '<div class="mini-stat deletion"><div class="ml">Deletion (누적)</div><div class="mv">−'+fmtInt(s.csvDeletionAll||0)+'</div><div class="ms">최근 30일 −'+fmtInt(s.csvDeletion30||0)+'</div></div>'
+        + '<div class="mini-stat outstanding"><div class="ml">Outstanding (현재)</div><div class="mv">'+fmtInt(s.currentWishlist||0)+'</div><div class="ms">'+esc(s.currentWishlistDate)+' 기준</div></div>'
+        + '</div>';
+    }
+    html += '<div class="chart-wrap">'+renderActualTrendSvg(s)+'</div></div>';
+
+    html += '<div class="section"><h2>마일스톤 곡선</h2><div class="shint">가장 이른 주요 마일스톤부터 출시일까지, 목표 곡선과 실측 Outstanding을 같은 타임라인 위에 겹쳐 보여줍니다.</div>';
+    html += '<div class="chart-wrap">'+renderCurveSvg(s, curve)+'</div>';
+    html += '<div class="legend"><span><i style="background:var(--series-1)"></i>목표 곡선</span><span><i style="background:var(--series-2)"></i>실측 Outstanding</span></div>';
+    if(gap){ html += '<div class="callout '+gap.status+'">'+esc(gap.msg)+'<div class="cnote">정량 모델이 아닌 방향성 참고용입니다.</div></div>'; }
+    html += '</div>';
+
+    html += '<details class="section"><summary><span class="chev">&#9656;</span>마일스톤별 필요 마케팅 액션</summary><div class="shint">Theorycraft STEAM Playbook 기준 단계별 핵심 액션입니다.</div><div class="timeline">';
+    ACTION_PHASES.forEach(function(ph, i){
+      html += '<div class="tl-row'+(i===curIdx?' current':'')+'"><div><div class="tl-num">'+ph.num+(i===curIdx?' · 현재':'')+'</div></div>'
+        + '<div><div class="tl-label">'+esc(ph.label)+'</div><ul class="tl-actions">'+ph.actions.map(function(a){ return '<li>'+esc(a)+'</li>'; }).join('')+'</ul></div></div>';
+    });
+    html += '</div></details>';
+
+    html += '<div class="section"><h2>주요 마일스톤</h2><div class="milestone-list">';
+    (s.events||[]).forEach(function(e){
+      html += '<div class="milestone-card"><div class="mtitle">'+esc(e.name||'(이름 없음)')+' <span class="mdate">'+esc(e.date||'')+' · '+(EVENT_TYPES[e.type]||e.type)+'</span></div>'
+        + '<div class="mrow">'
+        + (e.expectedBump?('예상 위시리스트 증가 '+fmtInt(e.expectedBump)):'')
+        + (e.budgetPlanned?(' · 계획 예산 '+fmtKRW(e.budgetPlanned)):'')
+        + (e.budgetSpent?(' · 집행 '+fmtKRW(e.budgetSpent)):'')
+        + '</div></div>';
+    });
+    html += '</div></div>';
+
+    html += '<div class="section"><h2>지역별 위시리스트 분포</h2><div class="region-list">';
+    (s.regions||[]).slice().sort(function(a,b){ return (a.actualPct-a.targetPct)-(b.actualPct-b.targetPct); }).forEach(function(r){
+      var status = r.targetPct<=0 ? 'good' : (r.actualPct >= r.targetPct*0.9 ? 'good' : (r.actualPct >= r.targetPct*0.6 ? 'warning' : 'critical'));
+      var fillPct = Math.max(0, Math.min(100, r.actualPct));
+      var targetPct = Math.max(0, Math.min(100, r.targetPct));
+      html += '<div class="region-row"><span class="region-name">'+esc(r.name)+'</span>'
+        + '<div class="bullet"><div class="bullet-fill '+status+'" style="width:'+fillPct+'%"></div><div class="bullet-target" style="left:'+targetPct+'%"></div></div>'
+        + '<span class="region-readout">실측 '+r.actualPct+'% / 목표 '+r.targetPct+'%</span></div>';
+    });
+    html += '</div></div>';
+
+    if(bud){
+      html += '<div class="section"><h2>예산</h2><div class="budget-out"><div class="bl">'+(s.budgetOverride?'직접 입력한 예산':'추천 예산 (CPW + 마일스톤 계획)')+'</div>'
+        + '<div class="bv">'+fmtKRW(s.budgetOverride||bud.budget)+'</div>'
+        + '<div class="bn">CPW 기준 '+fmtKRW(bud.cpwBudget)+' + 마일스톤 계획 '+fmtKRW(bud.milestoneBudget)+'</div>'
+        + (bud.milestoneSpent>0 ? '<div class="bn">마일스톤 집행: '+fmtKRW(bud.milestoneSpent)+' / 계획 '+fmtKRW(bud.milestoneBudget)+' ('+Math.round(bud.milestoneBudget?bud.milestoneSpent/bud.milestoneBudget*100:0)+'%)</div>' : '')
+        + '</div></div>';
+    }
+
+    app.innerHTML = html;
+  }
+
+  app.innerHTML = topbar(false) + '<div class="empty-state">불러오는 중…</div>';
+  fetch('data.json').then(function(r){ return r.json(); }).then(function(data){
+    PROJECTS = data.projects || [];
+    GENERATED_AT = data.generatedAt || null;
+    render();
+  }).catch(function(){
+    app.innerHTML = topbar(false) + '<div class="empty-state">데이터를 불러오지 못했습니다.</div>';
+  });
+})();
+</script>
+</body>
+</html>
