@@ -266,14 +266,7 @@
       return Object.assign({}, e, {d:d});
     }).filter(function(e){ return e.d<=totalDays; }).sort(function(a,b){ return a.d-b.d; });
     var futureEvents = allEvents.filter(function(e){ return e.d>=0 && e.expectedBump; });
-    var bumpSum = futureEvents.reduce(function(s,e){ return s+Number(e.expectedBump||0); }, 0);
-    var organicTotal = target - current - bumpSum;
-    var dailyRate = organicTotal / totalDays;
-    var points = []; var cumBump = 0; var ei = 0;
-    for(var d=0; d<=totalDays; d++){
-      while(ei<futureEvents.length && futureEvents[ei].d===d){ cumBump += Number(futureEvents[ei].expectedBump||0); ei++; }
-      points.push({d:d, date:new Date(today.getTime()+d*86400000), value: current + dailyRate*d + cumBump});
-    }
+    var futureBumpSum = futureEvents.reduce(function(s,e){ return s+Number(e.expectedBump||0); }, 0);
     var actualAll = (sim.actualSeries||[]).map(function(p){
       var pd = Math.round((new Date(p.date+"T00:00:00")-today)/86400000);
       return {d:pd, date:new Date(today.getTime()+pd*86400000), value:p.total};
@@ -282,15 +275,50 @@
     var earliestActualDay = actualAll.length ? actualAll[0].d : 0;
     var chartStartDay = Math.min(0, earliestEventDay, earliestActualDay);
     var actualPoints = actualAll.filter(function(p){ return p.d<=totalDays; });
+    // Target/reference curve spans the WHOLE visible domain (chartStartDay
+    // -> launch), using every milestone (past and future) as a step-jump,
+    // starting at the same value the actual data starts at, always landing
+    // exactly on `target` at launch — lets it be compared directly against
+    // the actual line over the same stretch of time.
+    var startValue = actualPoints.length ? actualPoints[0].value : 0;
+    var allBumpEvents = allEvents.filter(function(e){ return e.expectedBump; });
+    var allBumpSum = allBumpEvents.reduce(function(s,e){ return s+Number(e.expectedBump||0); }, 0);
+    var domainDays = Math.max(1, totalDays - chartStartDay);
+    var organicTotal = target - startValue - allBumpSum;
+    var dailyRate = organicTotal / domainDays;
+    var points = []; var cumBump = 0; var ei = 0;
+    for(var d=chartStartDay; d<=totalDays; d++){
+      while(ei<allBumpEvents.length && allBumpEvents[ei].d===d){ cumBump += Number(allBumpEvents[ei].expectedBump||0); ei++; }
+      points.push({d:d, date:new Date(today.getTime()+d*86400000), value: startValue + dailyRate*(d-chartStartDay) + cumBump});
+    }
     return {points:points, events:allEvents, totalDays:totalDays, chartStartDay:chartStartDay,
-      actualPoints:actualPoints, target:target, current:current, overshoot: bumpSum > target - current};
+      actualPoints:actualPoints, target:target, current:current, overshoot: futureBumpSum > target - current};
+  }
+  function observedBump(sim, dateStr, windowDays){
+    var series = sim.actualSeries;
+    if(!series || series.length<2) return null;
+    var target = new Date(dateStr+"T00:00:00");
+    var beforeT = target.getTime() - windowDays*86400000;
+    var afterT = target.getTime() + windowDays*86400000;
+    function nearest(t){
+      var best=null, bestDiff=Infinity;
+      series.forEach(function(p){
+        var pt = new Date(p.date+"T00:00:00").getTime();
+        var diff = Math.abs(pt-t);
+        if(diff<bestDiff){ bestDiff=diff; best=p; }
+      });
+      return best;
+    }
+    var b = nearest(beforeT), a = nearest(afterT);
+    if(!b || !a || b.date===a.date) return null;
+    return { before:b, after:a, delta: a.total-b.total };
   }
   function gapAnalysis(sim, curve){
     if(!curve || curve.launched || !sim.currentWishlist || !sim.currentWishlistDate) return null;
     var today = new Date(); today.setHours(0,0,0,0);
     var d = Math.round((new Date(sim.currentWishlistDate+"T00:00:00")-today)/86400000);
-    d = Math.max(0, Math.min(curve.totalDays, d));
-    var expected = curve.points[d].value;
+    d = Math.max(curve.chartStartDay, Math.min(curve.totalDays, d));
+    var expected = curve.points[d-curve.chartStartDay].value;
     var actual = num(sim.currentWishlist, 0);
     var gapPct = expected ? (actual-expected)/expected*100 : null;
     var status, msg;
@@ -322,7 +350,8 @@
     var plotW = W-padL-padR, plotH = H-padT-padB;
     var domainDays = Math.max(1, curve.totalDays - curve.chartStartDay);
     var actualVals = curve.actualPoints.map(function(p){ return p.value; });
-    var maxY = Math.max(curve.target, curve.current, sim.currentWishlist||0);
+    var blueVals = curve.points.map(function(p){ return p.value; });
+    var maxY = Math.max(curve.target, curve.current, sim.currentWishlist||0, Math.max.apply(null, blueVals));
     if(actualVals.length) maxY = Math.max(maxY, Math.max.apply(null, actualVals));
     maxY = maxY * 1.15 || 1;
     function xOf(d){ return padL + ((d-curve.chartStartDay)/domainDays)*plotW; }
@@ -342,7 +371,7 @@
         + '<text x="'+tx.toFixed(1)+'" y="'+(padT+plotH+28)+'" font-size="9" fill="var(--ink-muted)" text-anchor="middle">오늘</text>';
     }
     var path = curve.points.map(function(p,i){ return (i===0?'M':'L') + xOf(p.d).toFixed(1) + ',' + yOf(p.value).toFixed(1); }).join(' ');
-    var areaPath = path + ' L' + xOf(curve.totalDays).toFixed(1) + ',' + yOf(0).toFixed(1) + ' L' + xOf(0).toFixed(1) + ',' + yOf(0).toFixed(1) + ' Z';
+    var areaPath = path + ' L' + xOf(curve.totalDays).toFixed(1) + ',' + yOf(0).toFixed(1) + ' L' + xOf(curve.chartStartDay).toFixed(1) + ',' + yOf(0).toFixed(1) + ' Z';
     var actualPath = curve.actualPoints.length>1
       ? curve.actualPoints.map(function(p,i){ return (i===0?'M':'L') + xOf(p.d).toFixed(1) + ',' + yOf(p.value).toFixed(1); }).join(' ')
       : '';
@@ -539,7 +568,7 @@
     }
     html += '<div class="chart-wrap">'+renderActualTrendSvg(s)+'</div></div>';
 
-    html += '<div class="section"><h2>마일스톤 곡선</h2><div class="shint">가장 이른 주요 마일스톤부터 출시일까지, 목표 곡선과 실측 Outstanding을 같은 타임라인 위에 겹쳐 보여줍니다.</div>';
+    html += '<div class="section"><h2>마일스톤 곡선</h2><div class="shint">가장 이른 주요 마일스톤부터 출시일까지, 목표 곡선(파란선)과 실측 Outstanding(주황선)을 같은 시작점·같은 타임라인 위에 겹쳐 보여줍니다. 목표 곡선은 등록된 모든 마일스톤(지난 것 포함)의 예상 증가치를 반영해 계단식으로 꺾이고, 항상 출시일에 정확히 목표치에 도달하도록 계산됩니다.</div>';
     html += '<div class="chart-wrap">'+renderCurveSvg(s, curve)+'</div>';
     html += '<div class="legend"><span><i style="background:var(--series-1)"></i>목표 곡선</span><span><i style="background:var(--series-2)"></i>실측 Outstanding</span></div>';
     if(gap){ html += '<div class="callout '+gap.status+'">'+esc(gap.msg)+'<div class="cnote">정량 모델이 아닌 방향성 참고용입니다.</div></div>'; }
@@ -554,12 +583,16 @@
 
     html += '<div class="section"><h2>주요 마일스톤</h2><div class="milestone-list">';
     (s.events||[]).forEach(function(e){
+      var isPast = e.date ? (new Date(e.date+"T00:00:00") < new Date(new Date().toDateString())) : false;
+      var ob = (isPast && e.expectedBump) ? observedBump(s, e.date, 7) : null;
       html += '<div class="milestone-card"><div class="mtitle">'+esc(e.name||'(이름 없음)')+' <span class="mdate">'+esc(e.date||'')+' · '+(EVENT_TYPES[e.type]||e.type)+'</span></div>'
         + '<div class="mrow">'
         + (e.expectedBump?('예상 위시리스트 증가 '+fmtInt(e.expectedBump)):'')
         + (e.budgetPlanned?(' · 계획 예산 '+fmtKRW(e.budgetPlanned)):'')
         + (e.budgetSpent?(' · 집행 '+fmtKRW(e.budgetSpent)):'')
-        + '</div></div>';
+        + '</div>'
+        + (ob ? '<div class="mrow" style="margin-top:4px;color:var(--ink-muted);font-size:.78rem;">날짜 전후 7일 실측 변화: <b style="color:var(--ink-1);font-family:var(--font-mono);">'+(ob.delta>=0?'+':'')+fmtInt(ob.delta)+'</b></div>' : '')
+        + '</div>';
     });
     html += '</div></div>';
 
