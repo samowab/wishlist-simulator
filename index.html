@@ -609,7 +609,22 @@
         + '<div class="bullet"><div class="bullet-fill '+status+'" style="width:'+fillPct+'%"></div><div class="bullet-target" style="left:'+targetPct+'%"></div></div>'
         + '<span class="region-readout">실측 '+r.actualPct+'% / 목표 '+r.targetPct+'%</span></div>';
     });
-    html += '</div></div>';
+    html += '</div>';
+    (function(){
+      var targetSum = (s.regions||[]).reduce(function(sum,r){ return sum+num(r.targetPct,0); }, 0);
+      var actualSum = (s.regions||[]).reduce(function(sum,r){ return sum+num(r.actualPct,0); }, 0);
+      var targetOk = Math.abs(targetSum-100) <= 0.5;
+      var actualOk = Math.abs(actualSum-100) <= 0.5;
+      html += '<div class="mini-stats" style="grid-template-columns:1fr 1fr;margin-top:12px;">'
+        + '<div class="mini-stat" style="border:1px solid '+(targetOk?'transparent':'var(--warning)')+';"><div class="ml">목표 비중 합계</div>'
+          + '<div class="mv" style="color:'+(targetOk?'var(--good)':'var(--warning)')+';">'+targetSum.toFixed(1)+'%</div>'
+          + '<div class="ms">'+(targetOk?'100%에 맞음':'100%가 아닙니다')+'</div></div>'
+        + '<div class="mini-stat" style="border:1px solid '+(actualOk?'transparent':'var(--warning)')+';"><div class="ml">실측 비중 합계</div>'
+          + '<div class="mv" style="color:'+(actualOk?'var(--good)':'var(--warning)')+';">'+actualSum.toFixed(1)+'%</div>'
+          + '<div class="ms">'+(actualOk?'100%에 맞음':'100%가 아닙니다')+'</div></div>'
+        + '</div>';
+    })();
+    html += '</div>';
 
     if(bud){
       html += '<div class="section"><h2>예산</h2><div class="budget-out"><div class="bl">'+(s.budgetOverride?'직접 입력한 예산':'추천 예산 (CPW + 마일스톤 계획)')+'</div>'
